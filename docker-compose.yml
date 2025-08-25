@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile.dev
     environment:
       - APP_ENV=local
-      - DB_HOST=mysql
+      - DB_HOST=postgres
       - DB_DATABASE=laravel
       - DB_USERNAME=laravel
       - DB_PASSWORD=password
@@ -16,7 +16,7 @@ services:
       - ./apps/api:/var/www/html
       - ./apps/api/storage:/var/www/html/storage
     depends_on:
-      - mysql
+      - postgres
       - redis
     networks:
       - app-network
@@ -45,17 +45,16 @@ services:
       - "traefik.http.routers.frontend.entrypoints=web"
       - "traefik.http.services.frontend.loadbalancer.server.port=3000"
 
-  mysql:
-    image: mysql:8.0
+  postgres:
+    image: postgres:15
     ports:
-      - "3306:3306"
+      - "5432:5432"
     environment:
-      - MYSQL_ROOT_PASSWORD=password
-      - MYSQL_DATABASE=laravel
-      - MYSQL_USER=laravel
-      - MYSQL_PASSWORD=password
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=laravel
+      - POSTGRES_USER=laravel
     volumes:
-      - mysql_data:/var/lib/mysql
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - app-network
 
@@ -86,7 +85,7 @@ services:
       - app-network
 
 volumes:
-  mysql_data:
+  postgres_data:
   redis_data:
 
 networks:

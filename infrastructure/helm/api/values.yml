@@ -71,7 +71,7 @@ env:
   - name: APP_DEBUG
     value: "false"
   - name: DB_CONNECTION
-    value: "mysql"
+    value: "pgsql"
   - name: DB_HOST
     valueFrom:
       secretKeyRef:
@@ -99,7 +99,7 @@ env:
 
 # Secrets (these should be managed externally in production)
 secrets:
-  db-host: "api-mysql"
+  db-host: "api-postgresql"
   db-database: "laravel"
   db-username: "laravel"
   db-password: "changeme"
@@ -111,10 +111,10 @@ redis:
   auth:
     enabled: false
 
-mysql:
+postgresql:
   enabled: true
   auth:
-    rootPassword: "changeme"
+    postgresPassword: "changeme"
     database: "laravel"
     username: "laravel"
     password: "changeme"

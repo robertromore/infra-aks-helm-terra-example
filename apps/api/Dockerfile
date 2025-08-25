@@ -8,12 +8,12 @@ RUN apk add --no-cache \
     libxml2-dev \
     zip \
     unzip \
-    mysql-client \
+    postgresql-client \
     nginx \
     supervisor
 
 # Install PHP extensions
-RUN docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd
+RUN docker-php-ext-install pdo pdo_pgsql mbstring exif pcntl bcmath gd
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer

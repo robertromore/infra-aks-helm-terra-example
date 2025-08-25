@@ -47,7 +47,7 @@ env:
   - name: LOG_LEVEL
     value: "warning"
   - name: DB_CONNECTION
-    value: "mysql"
+    value: "pgsql"
   - name: CACHE_DRIVER
     value: "redis"
   - name: SESSION_DRIVER
@@ -55,8 +55,8 @@ env:
   - name: QUEUE_CONNECTION
     value: "redis"
 
-# External MySQL (Azure Database for MySQL)
-mysql:
+# External PostgreSQL (Azure Database for PostgreSQL)
+postgresql:
   enabled: false
 
 redis:
@@ -76,7 +76,7 @@ redis:
 
 # Production secrets (use Azure Key Vault in real scenarios)
 secrets:
-  db-host: "prod-mysql.mysql.database.azure.com"
+  db-host: "prod-postgres.postgres.database.azure.com"
   db-database: "laravel_prod"
   db-username: "laravel_prod"
   db-password: "production-db-password"
