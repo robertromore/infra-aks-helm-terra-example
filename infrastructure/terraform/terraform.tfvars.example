@@ -1,0 +1,36 @@
+# Example Terraform Variables File
+# Copy this to terraform.tfvars and update with your values
+
+# Basic Azure Configuration
+resource_group_name = "monorepo-rg"
+location           = "East US"
+cluster_name       = "monorepo-aks"
+
+# GitHub Container Registry Configuration
+# Replace with your actual GitHub credentials
+github_username = "your-github-username"
+github_token    = "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  # GitHub Personal Access Token
+github_email    = "your-email@example.com"
+
+# Kubernetes Cluster Configuration
+node_count        = 2
+node_vm_size      = "Standard_DS2_v2"
+kubernetes_version = "1.28.3"
+
+# Optional: Resource Tags
+tags = {
+  Environment = "staging"
+  Project     = "monorepo"
+  Owner       = "your-team"
+  CostCenter  = "engineering"
+}
+
+# Domain Configuration (optional)
+# domain_name = "example.com"
+
+# Notes:
+# 1. Never commit terraform.tfvars to version control
+# 2. GitHub token needs packages:read and packages:write permissions
+# 3. For production, consider using environment variables instead:
+#    export TF_VAR_github_token="your-token"
+# 4. Ensure your GitHub token has appropriate repository access

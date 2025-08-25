@@ -5,16 +5,8 @@ resource "azurerm_resource_group" "main" {
   tags = var.tags
 }
 
-# Azure Container Registry
-resource "azurerm_container_registry" "main" {
-  name                = var.acr_name
-  resource_group_name = azurerm_resource_group.main.name
-  location           = azurerm_resource_group.main.location
-  sku                = "Standard"
-  admin_enabled      = false
-
-  tags = var.tags
-}
+# Note: Using GitHub Container Registry (GHCR) instead of Azure Container Registry
+# GHCR authentication is handled via Kubernetes secrets in the applications
 
 # Virtual Network
 resource "azurerm_virtual_network" "main" {
@@ -65,12 +57,79 @@ resource "azurerm_kubernetes_cluster" "main" {
   tags = var.tags
 }
 
-# Role assignment for ACR
-resource "azurerm_role_assignment" "aks_acr" {
-  principal_id                     = azurerm_kubernetes_cluster.main.kubelet_identity[0].object_id
-  role_definition_name             = "AcrPull"
-  scope                           = azurerm_container_registry.main.id
-  skip_service_principal_aad_check = true
+# GHCR Pull Secret for Kubernetes
+resource "kubernetes_secret" "ghcr_pull_secret" {
+  metadata {
+    name      = "ghcr-pull-secret"
+    namespace = "default"
+  }
+
+  type = "kubernetes.io/dockerconfigjson"
+
+  data = {
+    ".dockerconfigjson" = jsonencode({
+      auths = {
+        "ghcr.io" = {
+          username = var.github_username
+          password = var.github_token
+          email    = var.github_email
+          auth     = base64encode("${var.github_username}:${var.github_token}")
+        }
+      }
+    })
+  }
+
+  depends_on = [azurerm_kubernetes_cluster.main]
+}
+
+# Create pull secret in production namespace
+resource "kubernetes_secret" "ghcr_pull_secret_production" {
+  metadata {
+    name      = "ghcr-pull-secret"
+    namespace = "production"
+  }
+
+  type = "kubernetes.io/dockerconfigjson"
+
+  data = {
+    ".dockerconfigjson" = jsonencode({
+      auths = {
+        "ghcr.io" = {
+          username = var.github_username
+          password = var.github_token
+          email    = var.github_email
+          auth     = base64encode("${var.github_username}:${var.github_token}")
+        }
+      }
+    })
+  }
+
+  depends_on = [azurerm_kubernetes_cluster.main]
+}
+
+# Create pull secret in staging namespace
+resource "kubernetes_secret" "ghcr_pull_secret_staging" {
+  metadata {
+    name      = "ghcr-pull-secret"
+    namespace = "staging"
+  }
+
+  type = "kubernetes.io/dockerconfigjson"
+
+  data = {
+    ".dockerconfigjson" = jsonencode({
+      auths = {
+        "ghcr.io" = {
+          username = var.github_username
+          password = var.github_token
+          email    = var.github_email
+          auth     = base64encode("${var.github_username}:${var.github_token}")
+        }
+      }
+    })
+  }
+
+  depends_on = [azurerm_kubernetes_cluster.main]
 }
 
 # Traefik Ingress Controller

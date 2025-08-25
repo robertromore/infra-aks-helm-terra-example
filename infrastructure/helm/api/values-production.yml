@@ -1,9 +1,12 @@
 replicaCount: 5
 
 image:
-  repository: monorepocontainerregistry.azurecr.io/api
+  repository: ghcr.io/GITHUB_USERNAME/REPO_NAME/api
   pullPolicy: Always
   tag: latest
+
+imagePullSecrets:
+  - name: ghcr-pull-secret
 
 resources:
   limits:

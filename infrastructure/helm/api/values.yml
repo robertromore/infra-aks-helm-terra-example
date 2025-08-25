@@ -1,12 +1,15 @@
 replicaCount: 2
 
 image:
-  repository: monorepocontainerregistry.azurecr.io/api
+  repository: ghcr.io/GITHUB_USERNAME/REPO_NAME/api
   pullPolicy: IfNotPresent
   tag: latest
 
 nameOverride: ""
 fullnameOverride: ""
+
+imagePullSecrets:
+  - name: ghcr-pull-secret
 
 serviceAccount:
   create: true

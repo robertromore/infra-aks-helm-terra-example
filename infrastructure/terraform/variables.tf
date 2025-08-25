@@ -16,10 +16,22 @@ variable "cluster_name" {
   default     = "monorepo-aks"
 }
 
-variable "acr_name" {
-  description = "Azure Container Registry name"
+variable "github_username" {
+  description = "GitHub username for GHCR access"
   type        = string
-  default     = "monorepocontainerregistry"
+  sensitive   = true
+}
+
+variable "github_token" {
+  description = "GitHub Personal Access Token for GHCR access"
+  type        = string
+  sensitive   = true
+}
+
+variable "github_email" {
+  description = "GitHub email for GHCR access"
+  type        = string
+  sensitive   = true
 }
 
 variable "node_count" {

@@ -13,13 +13,20 @@ if [[ ! "$ENVIRONMENT" =~ ^(staging|production)$ ]]; then
     exit 1
 fi
 
-# Build and push images
-echo "Building and pushing Docker images..."
-docker build -t monorepocontainerregistry.azurecr.io/api:latest ./apps/api
-docker build -t monorepocontainerregistry.azurecr.io/frontend:latest ./apps/frontend
+# Build and push images to GHCR
+echo "Building and pushing Docker images to GitHub Container Registry..."
 
-docker push monorepocontainerregistry.azurecr.io/api:latest
-docker push monorepocontainerregistry.azurecr.io/frontend:latest
+# Login to GHCR
+echo $GITHUB_TOKEN | docker login ghcr.io -u $GITHUB_USERNAME --password-stdin
+
+# Get repository name (assumes script is run from repo root)
+REPO_NAME=$(basename -s .git $(git config --get remote.origin.url) 2>/dev/null || echo "your-repo-name")
+
+docker build -t ghcr.io/$GITHUB_USERNAME/$REPO_NAME/api:latest ./apps/api
+docker build -t ghcr.io/$GITHUB_USERNAME/$REPO_NAME/frontend:latest ./apps/frontend
+
+docker push ghcr.io/$GITHUB_USERNAME/$REPO_NAME/api:latest
+docker push ghcr.io/$GITHUB_USERNAME/$REPO_NAME/frontend:latest
 
 # Deploy with Helm
 echo "Deploying API to $ENVIRONMENT..."

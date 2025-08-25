@@ -3,49 +3,49 @@ name: frontend CI/CD
 on:
   push:
     branches: [main, develop]
-    paths: ['apps/frontend/**', 'infrastructure/helm/frontend/**']
+    paths: ["apps/frontend/**", "infrastructure/helm/frontend/**"]
   pull_request:
     branches: [main]
-    paths: ['apps/frontend/**', 'infrastructure/helm/frontend/**']
+    paths: ["apps/frontend/**", "infrastructure/helm/frontend/**"]
 
 env:
-  REGISTRY: monorepocontainerregistry.azurecr.io
-  IMAGE_NAME: frontend
-  
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/frontend
+
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'npm'
+          node-version: "18"
+          cache: "npm"
           cache-dependency-path: apps/frontend/package-lock.json
-          
+
       - name: Install dependencies
         run: |
           cd apps/frontend
           npm ci
-          
+
       - name: Run linting
         run: |
           cd apps/frontend
           npm run lint
-          
+
       - name: Run type checking
         run: |
           cd apps/frontend
           npm run type-check
-          
+
       - name: Run tests
         run: |
           cd apps/frontend
           npm run test -- --coverage
-          
+
       - name: Build application
         run: |
           cd apps/frontend
@@ -55,17 +55,17 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
-    
+
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Log in to Azure Container Registry
-        uses: azure/docker-login@v1
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
         with:
-          login-server: ${{ env.REGISTRY }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
-          
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -74,7 +74,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=sha,prefix={{branch}}-
-            
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -87,10 +87,10 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set environment
         run: |
           if [[ ${{ github.ref }} == 'refs/heads/main' ]]; then
@@ -100,22 +100,22 @@ jobs:
             echo "ENVIRONMENT=staging" >> $GITHUB_ENV
             echo "NAMESPACE=staging" >> $GITHUB_ENV
           fi
-          
+
       - name: Azure Login
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-          
+
       - name: Set up kubectl
         uses: azure/setup-kubectl@v3
-        
+
       - name: Get AKS credentials
         run: |
           az aks get-credentials --resource-group monorepo-rg --name monorepo-aks
-          
+
       - name: Set up Helm
         uses: azure/setup-helm@v3
-        
+
       - name: Deploy to AKS
         run: |
           helm upgrade --install frontend-${{ env.ENVIRONMENT }} \

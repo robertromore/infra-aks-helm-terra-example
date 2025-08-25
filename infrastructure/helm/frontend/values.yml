@@ -1,9 +1,12 @@
 replicaCount: 3
 
 image:
-  repository: monorepocontainerregistry.azurecr.io/frontend
+  repository: ghcr.io/GITHUB_USERNAME/REPO_NAME/frontend
   pullPolicy: IfNotPresent
   tag: latest
+
+imagePullSecrets:
+  - name: ghcr-pull-secret
 
 service:
   type: ClusterIP
