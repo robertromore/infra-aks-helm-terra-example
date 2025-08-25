@@ -25,4 +25,4 @@ terraform apply
 
 4. Push your code to trigger CI/CD pipelines
 
-This setup provides a complete infrastructure foundation for a Laravel + Next.js monorepo with proper CI/CD, container orchestration, and cloud-native deployment patterns.
+This setup provides a complete infrastructure foundation for a Laravel + Next.js monorepo with proper CI/CD, container orchestration, and cloud-native deployment patterns using Traefik ingress controller.

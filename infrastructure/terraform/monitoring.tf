@@ -68,7 +68,7 @@ resource "helm_release" "kube_prometheus_stack" {
         }
         ingress = {
           enabled = true
-          ingressClassName = "nginx"
+          ingressClassName = "traefik"
           hosts = ["grafana.${var.domain_name}"]
           tls = [{
             secretName = "grafana-tls"

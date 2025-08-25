@@ -21,13 +21,10 @@ autoscaling:
 
 ingress:
   enabled: true
-  className: "nginx"
+  className: "traefik"
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
-    nginx.ingress.kubernetes.io/rate-limit: "200"
-    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
-    nginx.ingress.kubernetes.io/enable-cors: "true"
+    traefik.ingress.kubernetes.io/router.middlewares: "default-frontend-ratelimit@kubernetescrd,default-frontend-cors@kubernetescrd,default-frontend-body-size@kubernetescrd"
   hosts:
     - host: app.yourcompany.com
       paths:

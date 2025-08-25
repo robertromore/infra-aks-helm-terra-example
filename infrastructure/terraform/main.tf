@@ -1,7 +1,7 @@
 resource "azurerm_resource_group" "main" {
   name     = var.resource_group_name
   location = var.location
-  
+
   tags = var.tags
 }
 
@@ -12,7 +12,7 @@ resource "azurerm_container_registry" "main" {
   location           = azurerm_resource_group.main.location
   sku                = "Standard"
   admin_enabled      = false
-  
+
   tags = var.tags
 }
 
@@ -22,7 +22,7 @@ resource "azurerm_virtual_network" "main" {
   location           = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
   address_space      = ["10.1.0.0/16"]
-  
+
   tags = var.tags
 }
 
@@ -47,7 +47,7 @@ resource "azurerm_kubernetes_cluster" "main" {
     node_count     = var.node_count
     vm_size        = var.node_vm_size
     vnet_subnet_id = azurerm_subnet.aks.id
-    
+
     upgrade_settings {
       max_surge = "10%"
     }
@@ -73,23 +73,49 @@ resource "azurerm_role_assignment" "aks_acr" {
   skip_service_principal_aad_check = true
 }
 
-# NGINX Ingress Controller
-resource "helm_release" "nginx_ingress" {
-  name       = "nginx-ingress"
-  repository = "https://kubernetes.github.io/ingress-nginx"
-  chart      = "ingress-nginx"
-  namespace  = "ingress-nginx"
-  
+# Traefik Ingress Controller
+resource "helm_release" "traefik" {
+  name       = "traefik"
+  repository = "https://traefik.github.io/charts"
+  chart      = "traefik"
+  namespace  = "traefik-system"
+  version    = "25.0.0"
+
   create_namespace = true
-  
+
   set {
-    name  = "controller.service.type"
+    name  = "service.type"
     value = "LoadBalancer"
   }
-  
+
   set {
-    name  = "controller.service.annotations.service\\.beta\\.kubernetes\\.io/azure-load-balancer-health-probe-request-path"
-    value = "/healthz"
+    name  = "ports.web.port"
+    value = "80"
+  }
+
+  set {
+    name  = "ports.websecure.port"
+    value = "443"
+  }
+
+  set {
+    name  = "ports.websecure.tls.enabled"
+    value = "true"
+  }
+
+  set {
+    name  = "providers.kubernetesIngress.ingressClass"
+    value = "traefik"
+  }
+
+  set {
+    name  = "globalArguments[0]"
+    value = "--global.checknewversion=false"
+  }
+
+  set {
+    name  = "globalArguments[1]"
+    value = "--global.sendanonymoususage=false"
   }
 
   depends_on = [azurerm_kubernetes_cluster.main]
@@ -102,9 +128,9 @@ resource "helm_release" "cert_manager" {
   chart      = "cert-manager"
   namespace  = "cert-manager"
   version    = "v1.13.0"
-  
+
   create_namespace = true
-  
+
   set {
     name  = "installCRDs"
     value = "true"

@@ -12,10 +12,10 @@ service:
 
 ingress:
   enabled: true
-  className: "nginx"
+  className: "traefik"
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    traefik.ingress.kubernetes.io/router.middlewares: "default-frontend-headers@kubernetescrd,default-frontend-body-size@kubernetescrd"
   hosts:
     - host: app.example.com
       paths:
