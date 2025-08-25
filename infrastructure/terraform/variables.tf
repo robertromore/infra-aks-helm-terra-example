@@ -34,6 +34,24 @@ variable "github_email" {
   sensitive   = true
 }
 
+variable "cloudflare_api_token" {
+  description = "Cloudflare API token for DNS challenge"
+  type        = string
+  sensitive   = true
+}
+
+variable "cloudflare_zone_id" {
+  description = "Cloudflare Zone ID for domain"
+  type        = string
+  sensitive   = true
+}
+
+variable "domain_name" {
+  description = "Domain name for SSL certificates"
+  type        = string
+  default     = "example.com"
+}
+
 variable "node_count" {
   description = "Number of nodes in the default node pool"
   type        = number

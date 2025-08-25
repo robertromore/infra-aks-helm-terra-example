@@ -12,6 +12,11 @@ github_username = "your-github-username"
 github_token    = "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  # GitHub Personal Access Token
 github_email    = "your-email@example.com"
 
+# Cloudflare DNS Configuration (for SSL certificates)
+cloudflare_api_token = "your-cloudflare-api-token"
+cloudflare_zone_id   = "your-cloudflare-zone-id"
+domain_name          = "example.com"
+
 # Kubernetes Cluster Configuration
 node_count        = 2
 node_vm_size      = "Standard_DS2_v2"
@@ -31,6 +36,9 @@ tags = {
 # Notes:
 # 1. Never commit terraform.tfvars to version control
 # 2. GitHub token needs packages:read and packages:write permissions
-# 3. For production, consider using environment variables instead:
+# 3. Cloudflare API token needs Zone:Edit and Zone:Read permissions
+# 4. For production, consider using environment variables instead:
 #    export TF_VAR_github_token="your-token"
-# 4. Ensure your GitHub token has appropriate repository access
+#    export TF_VAR_cloudflare_api_token="your-cf-token"
+# 5. Ensure your GitHub token has appropriate repository access
+# 6. Domain name should match your Cloudflare zone

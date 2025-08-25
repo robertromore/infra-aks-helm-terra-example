@@ -34,7 +34,7 @@ ingress:
         - path: /
           pathType: Prefix
   tls:
-    - secretName: frontend-prod-tls
+    - secretName: wildcard-yourcompany-com-tls
       hosts:
         - app.yourcompany.com
 

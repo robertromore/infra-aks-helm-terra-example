@@ -17,7 +17,7 @@ ingress:
   enabled: true
   className: "traefik"
   annotations:
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    cert-manager.io/cluster-issuer: "letsencrypt-staging"
     traefik.ingress.kubernetes.io/router.middlewares: "default-frontend-headers@kubernetescrd,default-frontend-body-size@kubernetescrd"
   hosts:
     - host: app.example.com

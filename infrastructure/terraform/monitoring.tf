@@ -69,9 +69,12 @@ resource "helm_release" "kube_prometheus_stack" {
         ingress = {
           enabled = true
           ingressClassName = "traefik"
+          annotations = {
+            "cert-manager.io/cluster-issuer" = "letsencrypt-prod"
+          }
           hosts = ["grafana.${var.domain_name}"]
           tls = [{
-            secretName = "grafana-tls"
+            secretName = "wildcard-${replace(var.domain_name, ".", "-")}-tls"
             hosts = ["grafana.${var.domain_name}"]
           }]
         }
