@@ -68,13 +68,42 @@ github_username = "your-github-username"
 github_token    = "your-github-personal-access-token"
 github_email    = "your-email@example.com"
 
+# Cloudflare DNS configuration (for SSL certificates)
+cloudflare_api_token = "your-cloudflare-api-token"
+cloudflare_zone_id   = "your-cloudflare-zone-id"
+domain_name          = "yourdomain.com"
+
 # Optional: Customize cluster settings
 node_count        = 2
 node_vm_size      = "Standard_DS2_v2"
 kubernetes_version = "1.28.3"
 ```
 
-### 5. Deploy Infrastructure
+**Note**: For enhanced security, you can use environment variables instead of storing sensitive data in `terraform.tfvars`:
+
+```bash
+export TF_VAR_github_token="your-github-token"
+export TF_VAR_cloudflare_api_token="your-cloudflare-token"
+export TF_VAR_cloudflare_zone_id="your-zone-id"
+```
+
+### 5. Configure Cloudflare DNS (Required for SSL)
+
+1. **Create Cloudflare API Token**:
+   - Go to [Cloudflare Dashboard](https://dash.cloudflare.com/) → My Profile → API Tokens
+   - Create a custom token with permissions:
+     - Zone:Zone:Read
+     - Zone:DNS:Edit
+   - Include your specific zone in resources
+
+2. **Get Zone ID**:
+   - In Cloudflare Dashboard, select your domain
+   - Copy the Zone ID from the right sidebar
+
+3. **Update DNS Records**:
+   After deployment, point your domain records to the load balancer IP
+
+### 6. Deploy Infrastructure
 
 ```bash
 cd infrastructure/terraform
@@ -83,14 +112,14 @@ terraform plan
 terraform apply
 ```
 
-### 6. Configure GitHub Secrets
+### 7. Configure GitHub Secrets
 
 Set up these secrets in your GitHub repository (Settings → Secrets and variables → Actions):
 
 - `AZURE_CREDENTIALS`: Service principal credentials for Azure
 - `GITHUB_TOKEN`: Automatically available, or custom PAT with packages permissions
 
-### 7. Deploy Applications
+### 8. Deploy Applications
 
 Push your code to trigger CI/CD pipelines, or deploy manually:
 
@@ -113,7 +142,8 @@ export ENVIRONMENT="production"  # or "staging"
 
 ### Kubernetes Components
 - **Ingress**: Traefik with custom middlewares
-- **SSL/TLS**: cert-manager with Let's Encrypt
+- **SSL/TLS**: cert-manager with Let's Encrypt and Cloudflare DNS validation
+- **DNS**: Cloudflare DNS for domain management and SSL certificate challenges
 - **Storage**: Azure managed disks for persistent volumes
 - **Networking**: Azure CNI with network policies
 
@@ -124,8 +154,16 @@ export ENVIRONMENT="production"  # or "staging"
 
 ## Migration Guides
 
-- **[Traefik Migration](TRAEFIK_MIGRATION.md)**: Details about nginx to Traefik migration
-- **[GHCR Migration](GHCR_MIGRATION.md)**: Complete guide for ACR to GHCR migration
+### Container Registry Migration
+- **[ACR to GHCR Migration](docs/ACR_TO_GHCR.md)**: Complete guide for migrating from Azure Container Registry to GitHub Container Registry
+- **[GHCR to ACR Migration](docs/SWITCH_TO_ACR.md)**: Step-by-step guide for switching back to Azure Container Registry
+
+### Ingress Controller Migration  
+- **[nginx to Traefik Migration](docs/NGINX_TO_TRAEFIK.md)**: Comprehensive guide for migrating from nginx ingress to Traefik
+- **[Traefik to nginx Migration](docs/TRAEFIK_TO_NGINX.md)**: Complete instructions for switching from Traefik to nginx ingress
+
+### DNS and SSL Configuration
+- **[Cloudflare DNS Setup](CLOUDFLARE_DNS.md)**: Guide for configuring Cloudflare DNS validation with cert-manager
 
 ## Directory Structure
 
@@ -177,6 +215,21 @@ export ENVIRONMENT="production"  # or "staging"
    ```bash
    kubectl get certificates
    kubectl describe certificate <cert-name>
+   ```
+
+4. **Cloudflare/DNS Issues**:
+   ```bash
+   # Check ClusterIssuer status
+   kubectl describe clusterissuer letsencrypt-prod
+   
+   # Verify Cloudflare secret
+   kubectl get secret cloudflare-api-token-secret -n cert-manager
+   
+   # Test DNS resolution
+   dig api.yourdomain.com
+   
+   # Check certificate requests
+   kubectl get certificaterequests -A
    ```
 
 ### Useful Commands
