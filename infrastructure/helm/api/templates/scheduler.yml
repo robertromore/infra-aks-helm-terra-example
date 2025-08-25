@@ -1,0 +1,20 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "api.fullname" . }}-scheduler
+  labels:
+    {{- include "api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: scheduler
+spec:
+  schedule: "* * * * *"  # Every minute
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: scheduler
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+              command: ["php", "artisan", "schedule:run"]
+              env:
+                {{- toYaml .Values.env | nindent 16 }}
+          restartPolicy: OnFailure

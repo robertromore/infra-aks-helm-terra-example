@@ -1,0 +1,16 @@
+apiVersion: v2
+name: api
+description: Laravel API Helm chart
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+dependencies:
+  - name: redis
+    version: 17.15.2
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled
+  - name: mysql
+    version: 9.14.1
+    repository: https://charts.bitnami.com/bitnami
+    condition: mysql.enabled

@@ -1,0 +1,83 @@
+replicaCount: 5
+
+image:
+  repository: monorepocontainerregistry.azurecr.io/api
+  pullPolicy: Always
+  tag: latest
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+  hosts:
+    - host: api.yourcompany.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: api-prod-tls
+      hosts:
+        - api.yourcompany.com
+
+env:
+  - name: APP_ENV
+    value: "production"
+  - name: APP_DEBUG
+    value: "false"
+  - name: LOG_LEVEL
+    value: "warning"
+  - name: DB_CONNECTION
+    value: "mysql"
+  - name: CACHE_DRIVER
+    value: "redis"
+  - name: SESSION_DRIVER
+    value: "redis"
+  - name: QUEUE_CONNECTION
+    value: "redis"
+
+# External MySQL (Azure Database for MySQL)
+mysql:
+  enabled: false
+
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: "prod-redis-password"
+  master:
+    persistence:
+      enabled: true
+      size: 8Gi
+  replica:
+    replicaCount: 2
+    persistence:
+      enabled: true
+      size: 8Gi
+
+# Production secrets (use Azure Key Vault in real scenarios)
+secrets:
+  db-host: "prod-mysql.mysql.database.azure.com"
+  db-database: "laravel_prod"
+  db-username: "laravel_prod"
+  db-password: "production-db-password"
+  app-key: "base64:production-app-key"
+  jwt-secret: "production-jwt-secret"

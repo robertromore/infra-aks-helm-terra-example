@@ -1,0 +1,49 @@
+name: Deploy Infrastructure
+
+on:
+  push:
+    branches: [main]
+    paths: ['infrastructure/terraform/**']
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.6.0
+          
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: Terraform Init
+        run: |
+          cd infrastructure/terraform
+          terraform init
+          
+      - name: Terraform Plan
+        run: |
+          cd infrastructure/terraform
+          terraform plan -var-file="environments/${{ github.event.inputs.environment || 'staging' }}.tfvars"
+          
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main'
+        run: |
+          cd infrastructure/terraform
+          terraform apply -auto-approve -var-file="environments/${{ github.event.inputs.environment || 'staging' }}.tfvars"

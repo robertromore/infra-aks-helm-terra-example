@@ -1,0 +1,42 @@
+name: Database Migrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to migrate'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      dry_run:
+        description: 'Dry run (show SQL only)'
+        type: boolean
+        default: true
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials --resource-group monorepo-rg --name monorepo-aks
+          
+      - name: Run Migration Job
+        run: |
+          kubectl create job --from=deployment/api-${{ github.event.inputs.environment }} \
+            migration-$(date +%s) \
+            --namespace=${{ github.event.inputs.environment }} \
+            -- php artisan migrate --force ${{ github.event.inputs.dry_run && '--pretend' || '' }}
