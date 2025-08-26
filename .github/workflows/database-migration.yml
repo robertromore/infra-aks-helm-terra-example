@@ -1,0 +1,56 @@
+name: Database Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to migrate'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      dry_run:
+        description: 'Dry run (show SQL only)'
+        type: boolean
+        default: true
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials --resource-group monorepo-rg --name monorepo-aks
+          
+      - name: Check deployment exists
+        run: |
+          kubectl get deployment api-${{ github.event.inputs.environment }} -n ${{ github.event.inputs.environment }}
+
+      - name: Run Migration Job
+        run: |
+          JOB_NAME="migration-$(date +%s)"
+          kubectl create job $JOB_NAME \
+            --from=deployment/api-${{ github.event.inputs.environment }} \
+            --namespace=${{ github.event.inputs.environment }} \
+            -- php artisan migrate --force ${{ github.event.inputs.dry_run == 'true' && '--pretend' || '' }}
+          
+          # Wait for job completion
+          kubectl wait --for=condition=complete --timeout=600s job/$JOB_NAME -n ${{ github.event.inputs.environment }}
+          
+          # Show job logs
+          kubectl logs job/$JOB_NAME -n ${{ github.event.inputs.environment }}
+          
+          # Clean up job after completion
+          kubectl delete job $JOB_NAME -n ${{ github.event.inputs.environment }}

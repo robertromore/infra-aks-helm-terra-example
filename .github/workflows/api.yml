@@ -1,4 +1,4 @@
-name: API CI/CD
+name: API
 
 on:
   push:
@@ -36,20 +36,22 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: 8.2
+          php-version: 8.4
           extensions: mbstring, intl, bcmath, pdo_pgsql
           coverage: xdebug
 
       - name: Cache Composer packages
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
-          path: vendor
+          path: ~/.composer/cache
           key: ${{ runner.os }}-composer-${{ hashFiles('apps/api/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
 
       - name: Install dependencies
         run: |
           cd apps/api
-          composer install --prefer-dist --no-progress --no-suggest
+          composer install --prefer-dist --no-progress --no-interaction --optimize-autoloader
 
       - name: Create .env file
         run: |
@@ -62,13 +64,62 @@ jobs:
           cd apps/api
           php artisan migrate --force
 
+      - name: Run static analysis
+        run: |
+          cd apps/api
+          composer run phpstan || true
+
       - name: Run tests
         run: |
           cd apps/api
-          vendor/bin/phpunit --coverage-text
+          vendor/bin/phpunit --coverage-text --coverage-clover=coverage.xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: apps/api/coverage.xml
+          flags: api
+          name: api-coverage
+        continue-on-error: true
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.4
+          extensions: mbstring, intl, bcmath, pdo_pgsql
+
+      - name: Install dependencies
+        run: |
+          cd apps/api
+          composer install --no-dev --no-interaction
+
+      - name: Run security audit
+        run: |
+          cd apps/api
+          composer audit
+        continue-on-error: true
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: 'apps/api'
+          format: 'sarif'
+          output: 'trivy-fs-results.sarif'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-fs-results.sarif'
 
   build-and-push:
-    needs: test
+    needs: [test, security-scan]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
 
@@ -91,6 +142,9 @@ jobs:
             type=ref,event=branch
             type=sha,prefix={{branch}}-
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -98,6 +152,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
 
   deploy:
     needs: build-and-push
@@ -118,7 +175,7 @@ jobs:
           fi
 
       - name: Azure Login
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
@@ -146,6 +203,22 @@ jobs:
             ./infrastructure/helm/api \
             --namespace ${{ env.NAMESPACE }} \
             --create-namespace \
-            --values ./infrastructure/helm/api/values-${{ env.ENVIRONMENT }}.yaml \
+            --values ./infrastructure/helm/api/values.yaml \
+            $(if [ "${{ env.ENVIRONMENT }}" = "production" ]; then echo "--values ./infrastructure/helm/api/values-production.yaml"; fi) \
             --set image.tag=${{ github.sha }} \
+            --timeout=10m \
             --wait
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/api-${{ env.ENVIRONMENT }} -n ${{ env.NAMESPACE }} --timeout=300s
+          kubectl get pods -n ${{ env.NAMESPACE }} -l app.kubernetes.io/name=api
+
+      - name: Run smoke tests
+        run: |
+          # Wait for service to be ready
+          sleep 30
+          # Get service URL and run basic health check
+          kubectl get ingress -n ${{ env.NAMESPACE }}
+          # Add actual smoke test commands here
+        continue-on-error: true

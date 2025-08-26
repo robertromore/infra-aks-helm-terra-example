@@ -1,0 +1,78 @@
+name: Infrastructure
+
+on:
+  push:
+    branches: [main]
+    paths: ['infrastructure/terraform/**']
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.6
+          
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: Terraform Init
+        run: |
+          cd infrastructure/terraform
+          terraform init
+          
+      - name: Terraform Validate
+        run: |
+          cd infrastructure/terraform
+          terraform validate
+
+      - name: Terraform Format Check
+        run: |
+          cd infrastructure/terraform
+          terraform fmt -check
+
+      - name: Terraform Plan
+        run: |
+          cd infrastructure/terraform
+          terraform plan -var-file="environments/${{ github.event.inputs.environment || 'staging' }}.tfvars" -out=tfplan
+          
+      - name: Upload Terraform Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: infrastructure/terraform/tfplan
+
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main'
+        run: |
+          cd infrastructure/terraform
+          terraform apply -auto-approve tfplan
+
+      - name: Terraform Output
+        if: github.ref == 'refs/heads/main'
+        run: |
+          cd infrastructure/terraform
+          terraform output -json > terraform-outputs.json
+
+      - name: Upload Terraform Outputs
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-outputs
+          path: infrastructure/terraform/terraform-outputs.json

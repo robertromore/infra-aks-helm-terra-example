@@ -1,4 +1,4 @@
-name: Frontend CI/CD
+name: Frontend
 
 on:
   push:
@@ -24,6 +24,7 @@ jobs:
           node-version: 18
           cache: 'npm'
           cache-dependency-path: apps/frontend/package-lock.json
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
         run: |
@@ -43,7 +44,17 @@ jobs:
       - name: Run unit tests
         run: |
           cd apps/frontend
-          npm run test
+          npm run test -- --coverage --watchAll=false
+        env:
+          CI: true
+
+      - name: Upload test coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: apps/frontend/coverage/lcov.info
+          flags: frontend
+          name: frontend-coverage
+        continue-on-error: true
 
       - name: Run build test
         run: |
@@ -73,6 +84,12 @@ jobs:
           npm audit --audit-level high
         continue-on-error: true
 
+      - name: ESLint security scan
+        run: |
+          cd apps/frontend
+          npx eslint . --ext .js,.jsx,.ts,.tsx --format json --output-file eslint-results.json || true
+        continue-on-error: true
+
       - name: Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
@@ -82,7 +99,7 @@ jobs:
           output: 'trivy-results.sarif'
 
       - name: Upload Trivy scan results
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
@@ -111,6 +128,9 @@ jobs:
             type=ref,event=branch
             type=sha,prefix={{branch}}-
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -118,6 +138,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
 
   deploy:
     needs: build-and-push
@@ -138,7 +161,7 @@ jobs:
           fi
 
       - name: Azure Login
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
@@ -161,4 +184,19 @@ jobs:
             --values ./infrastructure/helm/frontend/values.yaml \
             $(if [ "${{ env.ENVIRONMENT }}" = "production" ]; then echo "--values ./infrastructure/helm/frontend/values-production.yaml"; fi) \
             --set image.tag=${{ github.sha }} \
+            --timeout=10m \
             --wait
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/frontend-${{ env.ENVIRONMENT }} -n ${{ env.NAMESPACE }} --timeout=300s
+          kubectl get pods -n ${{ env.NAMESPACE }} -l app.kubernetes.io/name=frontend
+
+      - name: Run smoke tests
+        run: |
+          # Wait for service to be ready
+          sleep 30
+          # Get service URL and test basic functionality
+          kubectl get ingress -n ${{ env.NAMESPACE }}
+          # Add actual smoke test commands here
+        continue-on-error: true

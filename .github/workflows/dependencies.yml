@@ -1,0 +1,80 @@
+name: Dependencies
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly on Monday at 6 AM
+  workflow_dispatch:
+
+jobs:
+  update-api-dependencies:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.4
+          
+      - name: Update Composer dependencies
+        run: |
+          cd apps/api
+          composer update --no-dev --optimize-autoloader
+          
+      - name: Run tests after update
+        run: |
+          cd apps/api
+          composer install --dev
+          vendor/bin/phpunit
+          
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: 'chore: update PHP dependencies'
+          title: 'Update API Dependencies'
+          body: |
+            Automated update of PHP dependencies.
+            
+            Please review and test before merging.
+          branch: update/api-dependencies
+          delete-branch: true
+
+  update-frontend-dependencies:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          
+      - name: Update npm dependencies
+        run: |
+          cd apps/frontend
+          npm update
+          
+      - name: Run tests after update
+        run: |
+          cd apps/frontend
+          npm test -- --watchAll=false
+          
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: 'chore: update Node.js dependencies'
+          title: 'Update Frontend Dependencies'
+          body: |
+            Automated update of Node.js dependencies.
+            
+            Please review and test before merging.
+          branch: update/frontend-dependencies
+          delete-branch: true

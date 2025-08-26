@@ -1,0 +1,68 @@
+name: Cleanup Resources
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to cleanup'
+        required: true
+        type: choice
+        options:
+          - staging
+          - review-apps
+      dry_run:
+        description: 'Dry run (show what would be deleted)'
+        type: boolean
+        default: true
+
+jobs:
+  cleanup-k8s:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials --resource-group monorepo-rg --name monorepo-aks
+          
+      - name: List resources to cleanup
+        run: |
+          echo "Resources in namespace: ${{ github.event.inputs.environment }}"
+          kubectl get all -n ${{ github.event.inputs.environment }} || echo "Namespace not found"
+          
+      - name: Cleanup old deployments
+        if: github.event.inputs.dry_run == 'false'
+        run: |
+          # Delete failed jobs older than 24 hours
+          kubectl delete jobs -n ${{ github.event.inputs.environment }} \
+            --field-selector=status.successful!=1 \
+            --field-selector=metadata.creationTimestamp<$(date -d '24 hours ago' -u +'%Y-%m-%dT%H:%M:%SZ') || true
+            
+          # Clean up completed jobs older than 7 days
+          kubectl delete jobs -n ${{ github.event.inputs.environment }} \
+            --field-selector=status.successful=1 \
+            --field-selector=metadata.creationTimestamp<$(date -d '7 days ago' -u +'%Y-%m-%dT%H:%M:%SZ') || true
+
+  cleanup-images:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.environment == 'review-apps'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Delete old container images
+        if: github.event.inputs.dry_run == 'false'
+        run: |
+          # This would require additional setup for GHCR cleanup
+          # For now, just show what would be deleted
+          echo "Would delete old review app images older than 30 days"
+          echo "This requires GHCR API access - implement as needed"
