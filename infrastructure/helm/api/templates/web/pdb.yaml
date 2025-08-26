@@ -1,0 +1,19 @@
+{{- if .Values.web.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "laravel-api.fullname" . }}-web
+  labels:
+    {{- include "laravel-api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  selector:
+    matchLabels:
+      {{- include "laravel-api.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: web
+  {{- if .Values.web.pdb.minAvailable }}
+  minAvailable: {{ .Values.web.pdb.minAvailable }}
+  {{- else if .Values.web.pdb.maxUnavailable }}
+  maxUnavailable: {{ .Values.web.pdb.maxUnavailable }}
+  {{- end }}
+{{- end }}

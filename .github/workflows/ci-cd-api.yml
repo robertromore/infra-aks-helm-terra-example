@@ -3,141 +3,318 @@ name: API CI/CD
 on:
   push:
     branches: [main, develop]
-    paths: ["apps/api/**", "infrastructure/helm/api/**"]
+    paths: ['apps/api/**', 'infrastructure/helm/api/**']
   pull_request:
     branches: [main]
-    paths: ["apps/api/**", "infrastructure/helm/api/**"]
+    paths: ['apps/api/**', 'infrastructure/helm/api/**']
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/api
-
+  IMAGE_NAME: api
+  
 jobs:
   test:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:15
+        image: postgres:15-alpine
         env:
           POSTGRES_PASSWORD: password
-          POSTGRES_DB: testing
           POSTGRES_USER: laravel
+          POSTGRES_DB: testing
         options: >-
           --health-cmd pg_isready
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=3
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
         ports:
           - 5432:5432
-
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          
     steps:
       - uses: actions/checkout@v4
-
+      
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: 8.2
-          extensions: mbstring, intl, bcmath, pdo_pgsql
+          extensions: mbstring, intl, bcmath, pdo_pgsql, redis
           coverage: xdebug
-
+          
       - name: Cache Composer packages
         uses: actions/cache@v3
         with:
           path: vendor
           key: ${{ runner.os }}-composer-${{ hashFiles('apps/api/composer.lock') }}
-
+          restore-keys: |
+            ${{ runner.os }}-composer-
+          
       - name: Install dependencies
         run: |
           cd apps/api
-          composer install --prefer-dist --no-progress --no-suggest
-
+          composer install --prefer-dist --no-progress --no-interaction
+          
       - name: Create .env file
         run: |
           cd apps/api
           cp .env.testing .env
           php artisan key:generate
-
-      - name: Run migrations
+          
+      - name: Run database migrations
         run: |
           cd apps/api
           php artisan migrate --force
-
-      - name: Run tests
+          
+      - name: Run PHPUnit tests
         run: |
           cd apps/api
-          vendor/bin/phpunit --coverage-text
+          vendor/bin/phpunit --coverage-clover coverage.xml
+          
+      - name: Run Laravel Dusk (E2E tests)
+        run: |
+          cd apps/api
+          php artisan dusk
+          
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          file: apps/api/coverage.xml
+          flags: backend
+          name: api-coverage
 
-  build-and-push:
-    needs: test
+  security-scan:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
-
     steps:
       - uses: actions/checkout@v4
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.2
+      
+      - name: Run Composer Security Audit
+        run: |
+          cd apps/api
+          composer audit --format=plain
+          
+      - name: Run Laravel Security Check
+        run: |
+          cd apps/api
+          composer require --dev enlightn/security-checker
+          vendor/bin/security-checker security:check composer.lock
+          
+      - name: Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: 'apps/api'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
 
-      - name: Log in to GitHub Container Registry
+  code-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.2
+          extensions: mbstring, intl, bcmath
+          
+      - name: Cache Composer packages
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('apps/api/composer.lock') }}
+          
+      - name: Install dependencies
+        run: |
+          cd apps/api
+          composer install --prefer-dist --no-progress
+          
+      - name: Run PHP_CodeSniffer
+        run: |
+          cd apps/api
+          vendor/bin/phpcs --standard=PSR12 app/
+          
+      - name: Run PHPStan
+        run: |
+          cd apps/api
+          vendor/bin/phpstan analyse --memory-limit=1G
+          
+      - name: Run Larastan
+        run: |
+          cd apps/api
+          vendor/bin/phpstan analyse --memory-limit=1G --configuration=phpstan.neon
+
+  build:
+    needs: [test, security-scan, code-quality]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-tag: ${{ steps.meta.outputs.tags }}
+      
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Log in to Container Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
+          
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch
+            type=ref,event=pr
             type=sha,prefix={{branch}}-
-
+            type=raw,value=latest,enable={{is_default_branch}}
+          
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v5
         with:
-          context: ./apps/api
+          context: apps/api
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
 
-  deploy:
-    needs: build-and-push
+  deploy-staging:
+    needs: build
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
-
+    if: github.ref == 'refs/heads/develop'
+    environment: staging
+    
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set environment
-        run: |
-          if [[ ${{ github.ref }} == 'refs/heads/main' ]]; then
-            echo "ENVIRONMENT=production" >> $GITHUB_ENV
-            echo "NAMESPACE=production" >> $GITHUB_ENV
-          else
-            echo "ENVIRONMENT=staging" >> $GITHUB_ENV
-            echo "NAMESPACE=staging" >> $GITHUB_ENV
-          fi
-
-      - name: Azure Login
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v3
-
-      - name: Get AKS credentials
-        run: |
-          az aks get-credentials --resource-group monorepo-rg --name monorepo-aks
-
-      - name: Set up Helm
+      
+      - name: Setup Helm
         uses: azure/setup-helm@v3
-
-      - name: Deploy to AKS
+        with:
+          version: '3.12.0'
+          
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: '1.28.0'
+          
+      - name: Configure kubectl
         run: |
-          helm upgrade --install api-${{ env.ENVIRONMENT }} \
-            ./infrastructure/helm/api \
-            --namespace ${{ env.NAMESPACE }} \
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG_STAGING }}" | base64 -d > ~/.kube/config
+          
+      - name: Add Helm repositories
+        run: |
+          helm repo add larakube https://charts.larakube.com
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo update
+          
+      - name: Deploy to staging
+        run: |
+          cd infrastructure/helm/api
+          helm upgrade --install api-staging . \
+            --namespace staging \
             --create-namespace \
-            --values ./infrastructure/helm/api/values-${{ env.ENVIRONMENT }}.yaml \
-            --set image.tag=${{ github.sha }} \
-            --wait
+            --set-string laravel-app.image.tag=${{ github.sha }} \
+            --values values.yaml \
+            --wait --timeout=10m
+            
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/api-staging-web -n staging
+          kubectl get pods -n staging -l app.kubernetes.io/instance=api-staging
+
+  deploy-production:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: '3.12.0'
+          
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: '1.28.0'
+          
+      - name: Configure kubectl
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG_PRODUCTION }}" | base64 -d > ~/.kube/config
+          
+      - name: Add Helm repositories
+        run: |
+          helm repo add larakube https://charts.larakube.com
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo update
+          
+      - name: Deploy to production
+        run: |
+          cd infrastructure/helm/api
+          helm upgrade --install api-production . \
+            --namespace production \
+            --create-namespace \
+            --set-string laravel-app.image.tag=${{ github.sha }} \
+            --values values.yaml \
+            --values values-production.yaml \
+            --wait --timeout=15m
+            
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/api-production-web -n production
+          kubectl get pods -n production -l app.kubernetes.io/instance=api-production
+          
+      - name: Run smoke tests
+        run: |
+          kubectl run smoke-test --image=curlimages/curl --rm -i --restart=Never -- \
+            curl -f http://api-production-web.production.svc.cluster.local/health
+
+  notify:
+    needs: [deploy-staging, deploy-production]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Notify deployment status
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          channel: '#deployments'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}

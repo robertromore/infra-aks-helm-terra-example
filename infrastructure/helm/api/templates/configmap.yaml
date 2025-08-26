@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "laravel-api.fullname" . }}
+  labels:
+    {{- include "laravel-api.labels" . | nindent 4 }}
+data:
+  # Laravel configuration
+  {{- range $key, $value := .Values.env }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  
+  # PHP configuration
+  PHP_INI_SCAN_DIR: "/usr/local/etc/php/conf.d:/app/docker/php"
+  PHP_MEMORY_LIMIT: "512M"
+  PHP_MAX_EXECUTION_TIME: "300"
+  PHP_UPLOAD_MAX_FILESIZE: "50M"
+  PHP_POST_MAX_SIZE: "50M"
+  
+  # Queue configuration
+  {{- if .Values.queue.enabled }}
+  QUEUE_FAILED_TABLE: "failed_jobs"
+  QUEUE_RETRY_AFTER: "90"
+  {{- end }}
+  
+  # Cache configuration
+  CACHE_PREFIX: "{{ include "laravel-api.fullname" . }}"
+  
+  # Session configuration
+  SESSION_LIFETIME: "120"
+  SESSION_ENCRYPT: "false"
+  SESSION_PATH: "/"
+  SESSION_DOMAIN: {{ (index .Values.ingress.hosts 0).host | quote }}

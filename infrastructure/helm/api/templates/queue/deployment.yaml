@@ -1,0 +1,106 @@
+{{- if .Values.queue.enabled }}
+{{- range .Values.queue.workers }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "laravel-api.fullname" $ }}-queue-{{ .name }}
+  labels:
+    {{- include "laravel-api.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: queue
+    app.kubernetes.io/queue: {{ .name }}
+spec:
+  {{- if not $.Values.queue.autoscaling.enabled }}
+  replicas: {{ .replicas | default 1 }}
+  {{- end }}
+  revisionHistoryLimit: {{ $.Values.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "laravel-api.selectorLabels" $ | nindent 6 }}
+      app.kubernetes.io/component: queue
+      app.kubernetes.io/queue: {{ .name }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") $ | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") $ | sha256sum }}
+        {{- with $.Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "laravel-api.selectorLabels" $ | nindent 8 }}
+        app.kubernetes.io/component: queue
+        app.kubernetes.io/queue: {{ .name }}
+        {{- with $.Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "laravel-api.serviceAccountName" $ }}
+      securityContext:
+        {{- toYaml $.Values.podSecurityContext | nindent 8 }}
+      
+      initContainers:
+        - name: wait-for-web
+          image: busybox:1.35
+          command: ['sh', '-c']
+          args:
+            - |
+              until nc -z {{ include "laravel-api.fullname" $ }}-web {{ $.Values.service.port }}; do
+                echo "Waiting for web service..."
+                sleep 2
+              done
+              echo "Web service is ready!"
+      
+      containers:
+        - name: queue-worker
+          securityContext:
+            {{- toYaml $.Values.securityContext | nindent 12 }}
+          image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag | default $.Chart.AppVersion }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          command: 
+            - php
+            - artisan
+            - queue:work
+            - --queue={{ .queue }}
+            - --verbose
+            - --tries=3
+            - --timeout=90
+            - --sleep=3
+            - --max-jobs=1000
+            - --max-time=3600
+          env:
+            {{- include "laravel-api.env" $ | nindent 12 }}
+            {{- with .env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "laravel-api.fullname" $ }}
+            - secretRef:
+                name: {{ include "laravel-api.fullname" $ }}
+          resources:
+            {{- toYaml .resources | nindent 12 }}
+          {{- with $.Values.volumeMounts }}
+          volumeMounts:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      
+      restartPolicy: Always
+      {{- with $.Values.volumes }}
+      volumes:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
+{{- end }}

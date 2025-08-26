@@ -1,0 +1,283 @@
+# =============================================================================
+# Larakube Configuration
+# =============================================================================
+# This file configures the Laravel application using the Larakube Helm chart
+# as a dependency. All Laravel-specific configuration is under 'laravel-app'
+
+laravel-app:
+  # =============================================================================
+  # Global Configuration
+  # =============================================================================
+  
+  nameOverride: ""
+  fullnameOverride: ""
+  
+  # Container image configuration
+  image:
+    repository: ghcr.io/GITHUB_USERNAME/REPO_NAME/api
+    pullPolicy: IfNotPresent
+    tag: latest
+
+  # Image pull secrets for private registries
+  imagePullSecrets:
+    - name: ghcr-pull-secret
+
+  # =============================================================================
+  # Service Account Configuration
+  # =============================================================================
+
+  serviceAccount:
+    create: true
+    automount: true
+    annotations: {}
+    name: ""
+
+  # =============================================================================
+  # Pod Configuration
+  # =============================================================================
+
+  podAnnotations: {}
+  podSecurityContext: {}
+  securityContext: {}
+
+  # Pod placement constraints
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  # =============================================================================
+  # Service Configuration
+  # =============================================================================
+
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8000
+
+  # =============================================================================
+  # Ingress Configuration
+  # =============================================================================
+
+  ingress:
+    enabled: true
+    className: "traefik"
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-staging"
+      traefik.ingress.kubernetes.io/router.middlewares: "default-api-headers@kubernetescrd,default-api-body-size@kubernetescrd"
+    hosts:
+      - host: api.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: api-tls
+        hosts:
+          - api.example.com
+
+  # =============================================================================
+  # Environment Variables
+  # =============================================================================
+
+  env:
+    APP_ENV: "production"
+    APP_DEBUG: "false"
+    DB_CONNECTION: "pgsql"
+    CACHE_DRIVER: "redis"
+    SESSION_DRIVER: "redis"
+    QUEUE_CONNECTION: "redis"
+    REDIS_HOST: "api-redis-master"
+    REDIS_PORT: "6379"
+
+  # Secret Environment Variables
+  secretEnvs:
+    - name: DB_HOST
+      secret: api-secrets
+      key: db-host
+    - name: DB_DATABASE
+      secret: api-secrets
+      key: db-database
+    - name: DB_USERNAME
+      secret: api-secrets
+      key: db-username
+    - name: DB_PASSWORD
+      secret: api-secrets
+      key: db-password
+    - name: APP_KEY
+      secret: api-secrets
+      key: app-key
+
+  # =============================================================================
+  # Web Application Configuration
+  # =============================================================================
+
+  web:
+    # Replica configuration
+    replicaCount: 2
+    
+    # Resource configuration
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+    
+    # Environment-specific variables
+    env:
+      SERVER_NAME: "_"
+      DOCUMENT_ROOT: "/var/www/html/public"
+    
+    # Autoscaling configuration
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 70
+      targetMemoryUtilizationPercentage: 80
+    
+    # Pod Disruption Budget
+    pdb:
+      enabled: true
+      maxUnavailable: 1
+    
+    # Health checks
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: 8000
+      initialDelaySeconds: 30
+      periodSeconds: 30
+      
+    readinessProbe:
+      httpGet:
+        path: /ready
+        port: 8000
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      
+    startupProbe:
+      httpGet:
+        path: /health
+        port: 8000
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      failureThreshold: 30
+
+    # Deployment strategy
+    strategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxSurge: 1
+        maxUnavailable: 0
+
+    # Traefik-specific configuration
+    traefik:
+      basicAuth:
+        enabled: false
+        secret: ""
+        realm: ""
+
+  # =============================================================================
+  # Worker Configuration
+  # =============================================================================
+
+  worker:
+    enabled: true
+    replicaCount: 2
+    
+    # Multiple queue workers for different queues
+    workers:
+      - name: default
+        queue: default
+        replicas: 2
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+      - name: emails
+        queue: emails
+        replicas: 1
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+    
+    # Queue worker autoscaling
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 5
+      targetCPUUtilizationPercentage: 80
+
+  # =============================================================================
+  # Scheduler Configuration
+  # =============================================================================
+
+  scheduler:
+    enabled: true
+    schedule: "* * * * *"  # Every minute
+    command: ["/bin/sh", "-c", "php artisan schedule:run"]
+    
+    env: {}
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+
+  # =============================================================================
+  # Database Migration Configuration
+  # =============================================================================
+
+  databaseMigration:
+    enabled: true
+    retry: 3
+    
+    env: {}
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+
+# =============================================================================
+# External Dependencies Configuration
+# =============================================================================
+
+# Secrets Configuration (managed externally in production)
+secrets:
+  db-host: "api-postgresql"
+  db-database: "laravel"
+  db-username: "laravel"
+  db-password: "changeme"
+  app-key: "base64:changeme"
+
+# Redis configuration
+redis:
+  enabled: true
+  auth:
+    enabled: false
+
+# PostgreSQL configuration
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: "changeme"
+    database: "laravel"
+    username: "laravel"
+    password: "changeme"
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi

@@ -1,0 +1,228 @@
+# =============================================================================
+# Production Environment Overrides
+# =============================================================================
+# This file contains production-specific overrides for the base values.yml
+# Use with: helm install -f values.yml -f values-production.yml
+
+# =============================================================================
+# Global Configuration
+# =============================================================================
+
+# Container image configuration - production settings
+image:
+  repository: ghcr.io/GITHUB_USERNAME/REPO_NAME/api
+  pullPolicy: Always  # Always pull latest in production
+  tag: latest
+
+# Image pull secrets for private registries
+imagePullSecrets:
+  - name: ghcr-pull-secret
+
+# =============================================================================
+# Ingress Configuration - Production
+# =============================================================================
+
+ingress:
+  enabled: true
+  className: "traefik"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"  # Production SSL certificates
+    traefik.ingress.kubernetes.io/router.middlewares: "default-api-ratelimit@kubernetescrd,default-api-headers@kubernetescrd,default-api-body-size@kubernetescrd"
+  hosts:
+    - host: api.yourcompany.com  # Production domain
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: wildcard-yourcompany-com-tls
+      hosts:
+        - api.yourcompany.com
+
+# =============================================================================
+# Production Environment Variables
+# =============================================================================
+
+env:
+  # Application configuration - production settings
+  - name: APP_ENV
+    value: "production"
+  - name: APP_DEBUG
+    value: "false"
+  - name: LOG_LEVEL
+    value: "warning"  # Reduced logging for production
+  
+  # Database configuration
+  - name: DB_CONNECTION
+    value: "pgsql"
+  
+  # Cache and session configuration - production optimized
+  - name: CACHE_DRIVER
+    value: "redis"
+  - name: SESSION_DRIVER
+    value: "redis"
+  - name: QUEUE_CONNECTION
+    value: "redis"
+
+# =============================================================================
+# Production Secrets Configuration
+# =============================================================================
+# NOTE: In real production, use Azure Key Vault or similar secret management
+
+secrets:
+  db-host: "prod-postgres.postgres.database.azure.com"
+  db-database: "laravel_prod"
+  db-username: "laravel_prod"
+  db-password: "production-db-password"
+  app-key: "base64:production-app-key"
+  jwt-secret: "production-jwt-secret"
+
+# =============================================================================
+# Web Application Configuration - Production
+# =============================================================================
+
+web:
+  # Higher replica count for production
+  replicaCount: 5
+  
+  # Advanced resource management
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+  
+  # Production autoscaling configuration
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  
+  # Topology spread constraints for high availability
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/name: laravel-api
+          app.kubernetes.io/component: web
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/name: laravel-api
+          app.kubernetes.io/component: web
+
+  # Anti-affinity for pod distribution
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values: [laravel-api]
+                - key: app.kubernetes.io/component
+                  operator: In
+                  values: [web]
+            topologyKey: kubernetes.io/hostname
+
+# =============================================================================
+# Queue Workers Configuration - Production
+# =============================================================================
+
+queue:
+  enabled: true
+  replicaCount: 5  # More workers for production
+  
+  # Advanced queue configuration
+  workers:
+    - name: default
+      queue: default
+      replicas: 3
+      resources:
+        requests:
+          memory: "256Mi"
+          cpu: "200m"
+        limits:
+          memory: "512Mi"
+          cpu: "400m"
+      env:
+        - name: QUEUE_TIMEOUT
+          value: "300"
+        - name: QUEUE_MEMORY
+          value: "400"
+    
+    - name: emails
+      queue: emails
+      replicas: 2
+      resources:
+        requests:
+          memory: "256Mi"
+          cpu: "200m"
+        limits:
+          memory: "512Mi"
+          cpu: "400m"
+      env:
+        - name: QUEUE_TIMEOUT
+          value: "120"
+        - name: QUEUE_MEMORY
+          value: "256"
+  
+  # Production queue autoscaling
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+# =============================================================================
+# Network Security Configuration
+# =============================================================================
+
+# Network security
+networkPolicy:
+  enabled: true
+
+# =============================================================================
+# Monitoring and Observability Configuration
+# =============================================================================
+
+# Monitoring and observability
+monitoring:
+  enabled: true
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/metrics"
+
+# =============================================================================
+# Dependencies Configuration - Production
+# =============================================================================
+
+# External PostgreSQL - Azure Database for PostgreSQL
+postgresql:
+  enabled: false  # Use external managed database in production
+
+# Redis configuration - production with auth and persistence
+redis:
+  enabled: true
+  auth:
+    enabled: true  # Enable authentication in production
+    password: "prod-redis-password"
+  master:
+    persistence:
+      enabled: true
+      size: 8Gi
+  replica:
+    replicaCount: 2  # Redis replicas for high availability
+    persistence:
+      enabled: true
+      size: 8Gi

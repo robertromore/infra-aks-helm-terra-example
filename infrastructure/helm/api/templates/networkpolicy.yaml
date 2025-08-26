@@ -1,0 +1,67 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "laravel-api.fullname" . }}
+  labels:
+    {{- include "laravel-api.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "laravel-api.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow traffic from ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: traefik-system
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.containerPort }}
+    
+    # Allow inter-pod communication (web to queue, etc.)
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "laravel-api.selectorLabels" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.containerPort }}
+  
+  egress:
+    # Allow DNS resolution
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+    
+    # Allow external database connections
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 3306
+        - protocol: TCP
+          port: 5432
+    
+    # Allow Redis connections
+    {{- if .Values.redis.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    {{- end }}
+    
+    # Allow HTTPS outbound (for APIs, webhooks, etc.)
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+{{- end }}
