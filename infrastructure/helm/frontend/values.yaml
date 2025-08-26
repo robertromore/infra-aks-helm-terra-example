@@ -1,0 +1,242 @@
+# =============================================================================
+# Global Configuration
+# =============================================================================
+
+# Override default names
+nameOverride: ""
+fullnameOverride: ""
+
+# Container image configuration
+image:
+  repository: ghcr.io/GITHUB_USERNAME/REPO_NAME/frontend
+  pullPolicy: IfNotPresent
+  tag: latest
+
+# Image pull secrets for private registries
+imagePullSecrets:
+  - name: ghcr-pull-secret
+
+# Number of pod replicas
+replicaCount: 2
+
+# Node.js environment
+nodeEnv: production
+
+# =============================================================================
+# Service Account Configuration
+# =============================================================================
+
+serviceAccount:
+  create: true
+  automount: false  # Frontend typically doesn't need Kubernetes API access
+  annotations: {}
+  name: ""
+
+# =============================================================================
+# Pod Configuration
+# =============================================================================
+
+podAnnotations: {}
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  fsGroup: 1001
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1001
+  capabilities:
+    drop:
+    - ALL
+
+# Pod placement constraints
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Topology spread constraints for better distribution
+topologySpreadConstraints: []
+
+# =============================================================================
+# Service Configuration
+# =============================================================================
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+  annotations: {}
+
+# =============================================================================
+# Ingress Configuration
+# =============================================================================
+
+ingress:
+  enabled: true
+  className: "traefik"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-staging"
+    traefik.ingress.kubernetes.io/router.middlewares: "default-frontend-headers@kubernetescrd"
+    # Next.js specific optimizations
+    traefik.ingress.kubernetes.io/router.rule: "Host(`app.example.com`)"
+  hosts:
+    - host: app.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: frontend-tls
+      hosts:
+        - app.example.com
+
+# =============================================================================
+# Resource Management
+# =============================================================================
+
+# Resource limits and requests
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# Pod Disruption Budget
+pdb:
+  maxUnavailable: 1
+
+# =============================================================================
+# Health Checks Configuration
+# =============================================================================
+
+healthcheck:
+  enabled: true
+  path: /api/health  # Next.js API route for health check
+  liveness:
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  startup:
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 30
+
+# =============================================================================
+# API Integration Configuration
+# =============================================================================
+
+api:
+  # Use external API (like the Laravel API service)
+  external:
+    enabled: true
+    url: "http://api.example.com"
+  # Or use internal cluster service
+  internal:
+    serviceName: "api"
+    namespace: "default"
+    port: 80
+
+# =============================================================================
+# Environment Variables
+# =============================================================================
+
+env:
+  # Next.js specific environment variables
+  - name: NEXT_PUBLIC_APP_URL
+    value: "https://app.example.com"
+  - name: NEXT_PUBLIC_APP_NAME
+    value: "My Next.js App"
+  - name: NEXT_PUBLIC_ENVIRONMENT
+    value: "staging"
+  # Add custom environment variables here
+  # - name: NEXT_PUBLIC_FEATURE_FLAG
+  #   value: "true"
+  # - name: ANALYTICS_ID
+  #   valueFrom:
+  #     secretKeyRef:
+  #       name: frontend-secrets
+  #       key: analytics-id
+
+# =============================================================================
+# ConfigMap Configuration
+# =============================================================================
+
+configMap:
+  enabled: true
+  data:
+    # Additional configuration that can be mounted as files
+    # app.json: |
+    #   {
+    #     "theme": "dark",
+    #     "features": {
+    #       "beta": true
+    #     }
+    #   }
+
+# =============================================================================
+# Volume Configuration
+# =============================================================================
+
+# Volumes for Next.js cache and temporary files
+volumes:
+  - name: nextjs-cache
+    emptyDir:
+      sizeLimit: 1Gi
+  - name: tmp
+    emptyDir:
+      sizeLimit: 100Mi
+
+volumeMounts:
+  - name: nextjs-cache
+    mountPath: /app/.next/cache
+  - name: tmp
+    mountPath: /tmp
+
+# =============================================================================
+# Next.js Specific Configuration
+# =============================================================================
+
+nextjs:
+  # Build-time configuration
+  build:
+    standalone: true  # Enable Next.js standalone output
+    tracing: false    # Disable tracing for smaller bundle size
+    
+  # Runtime configuration
+  experimental:
+    outputFileTracingRoot: "/app"
+    
+  # Optimization settings
+  optimization:
+    bundleAnalyzer: false
+    minimizer:
+      enabled: true
+      
+# =============================================================================
+# Monitoring and Observability
+# =============================================================================
+
+monitoring:
+  enabled: false
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/api/metrics"

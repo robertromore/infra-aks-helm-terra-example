@@ -1,0 +1,275 @@
+# =============================================================================
+# Production Environment Overrides - Next.js Frontend
+# =============================================================================
+# This file contains production-specific overrides for the base values.yaml
+# Use with: helm install -f values.yaml -f values-production.yaml
+
+# =============================================================================
+# Global Configuration - Production
+# =============================================================================
+
+# Container image configuration - production settings
+image:
+  repository: ghcr.io/GITHUB_USERNAME/REPO_NAME/frontend
+  pullPolicy: Always  # Always pull latest in production
+  tag: latest
+
+# Higher replica count for production
+replicaCount: 5
+
+# Production Node.js environment
+nodeEnv: production
+
+# =============================================================================
+# Ingress Configuration - Production
+# =============================================================================
+
+ingress:
+  enabled: true
+  className: "traefik"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"  # Production SSL certificates
+    traefik.ingress.kubernetes.io/router.middlewares: "default-frontend-ratelimit@kubernetescrd,default-frontend-cors@kubernetescrd,default-frontend-security@kubernetescrd,default-frontend-cache@kubernetescrd"
+    # Production-specific security headers
+    traefik.ingress.kubernetes.io/router.tls.options: "default-tls-options@kubernetescrd"
+  hosts:
+    - host: app.yourcompany.com  # Production domain
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: wildcard-yourcompany-com-tls
+      hosts:
+        - app.yourcompany.com
+
+# =============================================================================
+# Resource Management - Production
+# =============================================================================
+
+# Enhanced resource configuration for production workloads
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+
+# Production autoscaling configuration
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Enhanced Pod Disruption Budget for production
+pdb:
+  maxUnavailable: 2  # Allow more disruption with higher replica count
+
+# =============================================================================
+# High Availability Configuration
+# =============================================================================
+
+# Topology spread constraints for production
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: frontend
+        app.kubernetes.io/instance: frontend-production
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: frontend
+        app.kubernetes.io/instance: frontend-production
+
+# Anti-affinity for better pod distribution
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [frontend]
+          topologyKey: kubernetes.io/hostname
+
+# =============================================================================
+# API Integration - Production
+# =============================================================================
+
+api:
+  external:
+    enabled: true
+    url: "https://api.yourcompany.com"  # Production API URL
+
+# =============================================================================
+# Production Environment Variables
+# =============================================================================
+
+env:
+  # Next.js production configuration
+  - name: NEXT_PUBLIC_APP_URL
+    value: "https://app.yourcompany.com"
+  - name: NEXT_PUBLIC_APP_NAME
+    value: "Production App"
+  - name: NEXT_PUBLIC_ENVIRONMENT
+    value: "production"
+  - name: NEXT_PUBLIC_API_URL
+    value: "https://api.yourcompany.com"
+  
+  # Performance and monitoring
+  - name: NEXT_TELEMETRY_DISABLED
+    value: "1"
+  - name: NODE_OPTIONS
+    value: "--max-old-space-size=4096"  # Increased memory for production
+    
+  # Security headers
+  - name: NEXT_PUBLIC_CSP_NONCE
+    value: "true"
+    
+  # Analytics and monitoring (example)
+  # - name: NEXT_PUBLIC_GOOGLE_ANALYTICS_ID
+  #   valueFrom:
+  #     secretKeyRef:
+  #       name: frontend-secrets-prod
+  #       key: google-analytics-id
+  # - name: NEXT_PUBLIC_SENTRY_DSN
+  #   valueFrom:
+  #     secretKeyRef:
+  #       name: frontend-secrets-prod
+  #       key: sentry-dsn
+
+# =============================================================================
+# Enhanced Health Checks - Production
+# =============================================================================
+
+healthcheck:
+  enabled: true
+  path: /api/health
+  liveness:
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+  readiness:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  startup:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 10
+    failureThreshold: 60
+
+# =============================================================================
+# Volume Configuration - Production
+# =============================================================================
+
+# Enhanced volume configuration for production
+volumes:
+  - name: nextjs-cache
+    emptyDir:
+      sizeLimit: 2Gi  # Larger cache for production
+  - name: tmp
+    emptyDir:
+      sizeLimit: 500Mi
+  # Optional: Add persistent volume for user uploads or cache
+  # - name: uploads
+  #   persistentVolumeClaim:
+  #     claimName: frontend-uploads
+
+volumeMounts:
+  - name: nextjs-cache
+    mountPath: /app/.next/cache
+  - name: tmp
+    mountPath: /tmp
+  # - name: uploads
+  #   mountPath: /app/public/uploads
+
+# =============================================================================
+# Next.js Production Configuration
+# =============================================================================
+
+nextjs:
+  build:
+    standalone: true
+    tracing: true  # Enable tracing in production for debugging
+    
+  experimental:
+    outputFileTracingRoot: "/app"
+    serverComponentsExternalPackages: []
+    
+  optimization:
+    bundleAnalyzer: false
+    minimizer:
+      enabled: true
+      terserOptions:
+        compress:
+          drop_console: true  # Remove console.log in production
+
+# =============================================================================
+# Monitoring and Observability - Production
+# =============================================================================
+
+monitoring:
+  enabled: true
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/api/metrics"
+
+# =============================================================================
+# Security Configuration - Production
+# =============================================================================
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  fsGroup: 1001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1001
+  capabilities:
+    drop:
+    - ALL
+
+# =============================================================================
+# Network Policy - Production
+# =============================================================================
+
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: traefik-system
+      ports:
+        - protocol: TCP
+          port: 3000
+  egress:
+    - to: []  # Allow all egress (adjust as needed)
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+        - protocol: UDP
+          port: 53

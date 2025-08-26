@@ -1,0 +1,19 @@
+{{- if .Values.configMap.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "frontend.fullname" . }}-config
+  labels:
+    {{- include "frontend.labels" . | nindent 4 }}
+data:
+  {{- with .Values.configMap.data }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+  # Auto-generated environment variables
+  NODE_ENV: {{ .Values.nodeEnv | quote }}
+  {{- if .Values.api.external.enabled }}
+  NEXT_PUBLIC_API_URL: {{ .Values.api.external.url | quote }}
+  {{- else }}
+  NEXT_PUBLIC_API_URL: {{ include "frontend.apiUrl" . | quote }}
+  {{- end }}
+{{- end }}
