@@ -1,0 +1,14 @@
+{{- if and .Values.autoscaling.enabled (gt .Values.autoscaling.minReplicas 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "api.fullname" . }}-web
+  labels:
+    {{- include "api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  maxUnavailable: {{ .Values.pdb.maxUnavailable | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "api.web.selectorLabels" . | nindent 6 }}
+{{- end }}

@@ -1,16 +1,31 @@
-# Infrastructure Setup with AKS, Helm, and Terraform
+# Laravel API Infrastructure with AKS, Helm, and Terraform
 
-A complete infrastructure-as-code solution for deploying Laravel + Next.js applications on Azure Kubernetes Service (AKS) using Terraform, Helm, and GitHub Container Registry (GHCR).
+A production-ready infrastructure-as-code solution for deploying Laravel API applications on Azure Kubernetes Service (AKS) using Terraform, Helm, and GitHub Container Registry (GHCR).
+
+🚀 **Quick Start**: Follow the [Implementation Plan](docs/IMPLEMENTATION_PLAN.md) for step-by-step deployment instructions.
 
 ## Features
 
+### 🏗️ **Infrastructure**
 - **Container Registry**: GitHub Container Registry (GHCR) for cost-effective image storage
+- **Kubernetes**: Azure Kubernetes Service (AKS) with production-grade configuration
 - **Ingress Controller**: Traefik for advanced routing and middleware capabilities
-- **Infrastructure as Code**: Terraform for Azure resource management
-- **Application Deployment**: Helm charts for Kubernetes applications
-- **CI/CD**: GitHub Actions workflows for automated testing and deployment
-- **Monitoring**: Prometheus and Grafana integration
-- **Security**: SSL/TLS certificates with cert-manager
+- **Infrastructure as Code**: Terraform for reproducible Azure resource management
+- **SSL/TLS**: Automated certificates with cert-manager and Let's Encrypt
+
+### 🚀 **Laravel Application**
+- **Web Deployment**: Laravel API with horizontal pod autoscaling
+- **Queue Workers**: Background job processing with Redis queues
+- **Scheduler**: Laravel Cron jobs using Kubernetes CronJobs
+- **Database**: PostgreSQL with automatic migrations
+- **Health Checks**: Comprehensive liveness, readiness, and startup probes
+- **High Availability**: Pod disruption budgets and anti-affinity rules
+
+### 🔄 **CI/CD & DevOps**
+- **GitHub Actions**: Automated testing, building, and deployment workflows
+- **Multi-Environment**: Separate staging and production configurations
+- **Security Scanning**: Vulnerability scans and code quality checks
+- **Monitoring**: Prometheus and Grafana integration ready
 
 ## Prerequisites
 
@@ -165,20 +180,46 @@ export ENVIRONMENT="production"  # or "staging"
 ### DNS and SSL Configuration
 - **[Cloudflare DNS Setup](CLOUDFLARE_DNS.md)**: Guide for configuring Cloudflare DNS validation with cert-manager
 
-## Directory Structure
+## Repository Structure
 
 ```
 ├── .github/workflows/          # GitHub Actions CI/CD pipelines
+│   ├── ci-cd-api.yml          # API deployment pipeline
+│   ├── security.yml           # Security scanning
+│   └── ...
 ├── apps/
 │   ├── api/                   # Laravel API application
-│   └── frontend/              # Next.js frontend application
+│   │   ├── Dockerfile         # Container configuration
+│   │   └── README.md          # Application documentation
+│   └── frontend/              # Frontend application (if applicable)
 ├── infrastructure/
-│   ├── helm/                  # Helm charts for applications
-│   │   ├── api/
-│   │   └── frontend/
-│   └── terraform/             # Terraform infrastructure code
+│   ├── helm/                  # Helm charts for Kubernetes deployment
+│   │   └── api/               # Laravel API Helm chart
+│   │       ├── Chart.yaml     # Chart metadata
+│   │       ├── values.yaml    # Default values
+│   │       ├── values-production.yaml # Production overrides
+│   │       ├── templates/     # Kubernetes manifests
+│   │       │   ├── deployment.yaml
+│   │       │   ├── service.yaml
+│   │       │   ├── ingress.yaml
+│   │       │   ├── queue-deployment.yaml
+│   │       │   ├── scheduler.yaml
+│   │       │   └── ...
+│   │       └── README.md      # Helm chart documentation
+│   └── terraform/             # Infrastructure as Code
+│       ├── main.tf           # Main Terraform configuration
+│       ├── variables.tf      # Variable definitions
+│       ├── environments/     # Environment-specific configs
+│       └── ...
 ├── scripts/                   # Deployment and utility scripts
-└── docs/                      # Additional documentation
+│   ├── deploy.sh             # Deployment automation
+│   ├── cleanup.sh            # Resource cleanup
+│   └── ...
+└── docs/                      # Project documentation
+    ├── IMPLEMENTATION_PLAN.md # Complete setup guide
+    ├── ACR_TO_GHCR.md        # Container registry migration
+    ├── CLOUDFLARE_DNS.md     # DNS configuration
+    └── ...
 ```
 
 ## Key Benefits

@@ -132,8 +132,16 @@ jobs:
       - name: Set up Helm
         uses: azure/setup-helm@v3
 
+      - name: Add Helm repositories
+        run: |
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo update
+
       - name: Deploy to AKS
         run: |
+          cd ./infrastructure/helm/api
+          helm dependency update
+          cd ../../../
           helm upgrade --install api-${{ env.ENVIRONMENT }} \
             ./infrastructure/helm/api \
             --namespace ${{ env.NAMESPACE }} \

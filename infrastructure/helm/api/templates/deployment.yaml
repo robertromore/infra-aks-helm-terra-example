@@ -10,7 +10,7 @@ spec:
   {{- end }}
   selector:
     matchLabels:
-      {{- include "api.selectorLabels" . | nindent 6 }}
+      {{- include "api.web.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -18,7 +18,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "api.selectorLabels" . | nindent 8 }}
+        {{- include "api.web.selectorLabels" . | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -33,16 +33,18 @@ spec:
           command: ['sh', '-c']
           args:
             - |
-              until nc -z {{ .Values.secrets.db-host }} 3306; do
-                echo "Waiting for database..."
+              until nc -z {{ include "api.database.host" . }} {{ include "api.database.port" . }}; do
+                echo "Waiting for PostgreSQL database..."
                 sleep 2
               done
               echo "Database is ready!"
+        {{- if .Values.databaseMigration.enabled }}
         - name: migrate
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           command: ["php", "artisan", "migrate", "--force"]
           env:
             {{- toYaml .Values.env | nindent 12 }}
+        {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
